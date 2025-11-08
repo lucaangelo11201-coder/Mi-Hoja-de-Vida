@@ -1,0 +1,232 @@
+import java.time.*;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+
+// Aplicación simple de gestión de biblioteca usando POO, herencia y switch
+public class LibraryApp {
+
+    // Clase base: Material bibliográfico
+    static abstract class Material {
+        protected int id;
+        protected String title;
+        protected boolean available;
+
+        public Material(int id, String title) {
+            this.id = id;
+            this.title = title;
+            this.available = true; // por defecto está disponible
+        }
+
+        public int getId() { return id; }
+        public String getTitle() { return title; }
+        public boolean isAvailable() { return available; }
+        public void setAvailable(boolean v) { this.available = v; }
+
+        // mostrar información breve del material
+        public String toString() {
+            return "ID:" + id + " - " + title + (available ? " (Disponible)" : " (Prestado)");
+        }
+    }
+
+    // Subclase ejemplo: Libro
+    static class Book extends Material {
+        private String author;
+
+        public Book(int id, String title, String author) {
+            super(id, title);
+            this.author = author;
+        }
+
+        @Override
+        public String toString() {
+            return "Libro - " + super.toString() + " - Autor: " + author;
+        }
+    }
+
+    // Clase que representa un préstamo
+    static class Loan {
+        private Material material; // material prestado
+        private String borrower; // nombre del que presta
+        private LocalDate loanDate; // fecha de préstamo
+        private LocalDate dueDate; // fecha de devolución esperada
+        private static final int DEFAULT_DAYS = 7; // días por defecto de préstamo
+        private static final double FINE_PER_DAY = 2.0; // multa por día retrasado
+
+        public Loan(Material m, String borrower) {
+            this.material = m;
+            this.borrower = borrower;
+            this.loanDate = LocalDate.now(); // usar la fecha actual
+            this.dueDate = loanDate.plusDays(DEFAULT_DAYS); // vencimiento
+        }
+
+        public Material getMaterial() { return material; }
+        public String getBorrower() { return borrower; }
+        public LocalDate getLoanDate() { return loanDate; }
+        public LocalDate getDueDate() { return dueDate; }
+
+        // calcular días de retraso (0 si no hay atraso)
+        public long daysOverdue() {
+            LocalDate today = LocalDate.now();
+            if (today.isAfter(dueDate)) {
+                return ChronoUnit.DAYS.between(dueDate, today);
+            }
+            return 0;
+        }
+
+        // calcular multa según días de retraso
+        public double calculateFine() {
+            long days = daysOverdue();
+            return days * FINE_PER_DAY;
+        }
+    }
+
+    // Clase que representa la biblioteca y gestiona inventario y préstamos
+    static class Library {
+        private List<Material> inventory = new ArrayList<>();
+        private Map<Integer, Loan> loans = new HashMap<>(); // map id material -> loan
+
+        // Base de los libros_agregar libro
+        public void loadSampleData() {
+            inventory.add(new Book(1, "Programación en Java", "Autor A"));
+            inventory.add(new Book(2, "Estructuras de Datos", "Autor B"));
+            inventory.add(new Book(3, "Bases de Datos", "Autor C"));
+        }
+
+        // listar inventario completo
+        public void listInventory() {
+            System.out.println("--- Inventario de la Biblioteca ---");
+            for (Material m : inventory) {
+                System.out.println(m.toString());
+            }
+            System.out.println("-----------------------------------");
+        }
+
+        // buscar material por id
+        private Material findById(int id) {
+            for (Material m : inventory) {
+                if (m.getId() == id) return m;
+            }
+            return null;
+        }
+
+        // prestar material: marca como no disponible y crea Loan
+        public boolean loanMaterial(int id, String borrower) {
+            // buscar material por id
+            Material m = findById(id);
+            // Si no existe o no está disponible, mostrar mensaje unificado solicitado
+            if (m == null || !m.isAvailable()) {
+                // Mensaje consolidado cuando el ID no existe o el material no está disponible
+                System.out.println("No está disponible.");
+                return false;
+            }
+            // crear préstamo y marcar no disponible
+            Loan loan = new Loan(m, borrower);
+            loans.put(id, loan);
+            m.setAvailable(false);
+            System.out.println("Préstamo realizado: " + m.getTitle() + " a " + borrower + ". Vence: " + loan.getDueDate());
+            return true;
+        }
+
+        // devolver material: calcula multa si aplica y elimina el préstamo
+        public boolean returnMaterial(int id) {
+            Loan loan = loans.get(id);
+            if (loan == null) {
+                System.out.println("No hay registro de préstamo para el ID " + id);
+                return false;
+            }
+            double fine = loan.calculateFine();
+            // marcar disponible
+            loan.getMaterial().setAvailable(true);
+            loans.remove(id);
+            System.out.println("Devolución procesada para: " + loan.getMaterial().getTitle());
+            if (fine > 0) {
+                System.out.println("Multa por retraso: $" + fine + " (" + loan.daysOverdue() + " días)");
+            } else {
+                System.out.println("No hay multa. Devolución a tiempo.");
+            }
+            return true;
+        }
+
+        // mostrar multas de todos los préstamos activos
+        public void showFines() {
+            System.out.println("--- Reporte de Multas (préstamos activos) ---");
+            boolean any = false;
+            for (Loan loan : loans.values()) {
+                long days = loan.daysOverdue();
+                double fine = loan.calculateFine();
+                System.out.println("ID:" + loan.getMaterial().getId() + " - " + loan.getMaterial().getTitle() + " - Prestado a: " + loan.getBorrower());
+                System.out.println("  Fecha préstamo: " + loan.getLoanDate() + " | Vence: " + loan.getDueDate());
+                if (days > 0) {
+                    System.out.println("  Días de atraso: " + days + " | Multa: $" + fine);
+                } else {
+                    System.out.println("  Sin atraso");
+                }
+                any = true;
+            }
+            if (!any) System.out.println("No hay préstamos activos.");
+            System.out.println("---------------------------------------------");
+        }
+    }
+
+    // Método principal: menú interactivo simple
+    public static void main(String[] args) {
+        Scanner sc = new Scanner(System.in);
+        Library library = new Library();
+        library.loadSampleData(); // cargar datos de ejemplo
+
+        int option = 0;
+        // ciclo principal del menú
+        while (option != 5) {
+            // mostrar el menú
+            System.out.println();
+            System.out.println("Menú Biblioteca");
+            System.out.println("1. Inventario");
+            System.out.println("2. Préstamo");
+            System.out.println("3. Devolución");
+            System.out.println("4. Multas");
+            System.out.println("5. Salir");
+            System.out.print("Seleccione una opción: ");
+
+            // leer opción (si falla parseo, opc = 0 y cae en default)
+            try {
+                option = Integer.parseInt(sc.nextLine());
+            } catch (NumberFormatException e) {
+                option = 0;
+            }
+
+            switch (option) {
+                case 1:
+                    // listar inventario
+                    library.listInventory();
+                    break;
+                case 2:
+                    // préstamo: pedir ID y nombre del usuario
+                    System.out.print("Ingrese ID del material a prestar: ");
+                    int idLoan = Integer.parseInt(sc.nextLine());
+                    System.out.print("Nombre del prestatario: ");
+                    String borrower = sc.nextLine();
+                    library.loanMaterial(idLoan, borrower);
+                    break;
+                case 3:
+                    // devolución: pedir ID
+                    System.out.print("Ingrese ID del material a devolver: ");
+                    int idReturn = Integer.parseInt(sc.nextLine());
+                    library.returnMaterial(idReturn);
+                    break;
+                case 4:
+                    // mostrar multas de préstamos activos
+                    library.showFines();
+                    break;
+                case 5:
+                    // salir
+                    System.out.println("Saliendo. ¡Hasta luego!");
+                    break;
+                default:
+                    System.out.println("Opción no válida. Intente nuevamente.");
+            }
+        }
+
+        sc.close(); // cerrar el scanner antes de terminar
+    }
+}
+
